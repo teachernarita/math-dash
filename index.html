@@ -1,0 +1,1802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Blocky Math Runner — 3D Educational Game</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --pixel-font: 'Press Start 2P', monospace;
+      --ui-font: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--ui-font);
+      background: #0f172a;
+      color: #f8fafc;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .pixel-font {
+      font-family: var(--pixel-font);
+      letter-spacing: 0.03em;
+    }
+    .pixel-border {
+      border: 3px solid #1e293b;
+      box-shadow: 0 4px 0 #0f172a;
+    }
+    .pixel-btn {
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+      box-shadow: 0 4px 0 rgba(15, 23, 42, 0.75);
+    }
+    .pixel-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.75);
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    #preview-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.4);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.5);
+      border-radius: 3px;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.75); opacity: 0; }
+      70% { transform: scale(1.06); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+    }
+    @keyframes pulseBanner {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+    .animate-banner {
+      animation: pulseBanner 1.4s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-50">
+  <div id="app" class="relative w-full h-[100dvh] overflow-hidden">
+
+    <!-- ==================== AVATAR & SETUP SCREEN ==================== -->
+    <div id="setup-screen" class="absolute inset-0 z-30 flex flex-col bg-gradient-to-b from-sky-900 via-indigo-950 to-slate-950 overflow-y-auto custom-scroll">
+      <!-- Top Header -->
+      <header class="flex items-center justify-between px-4 py-3 sm:px-6 border-b border-white/10 bg-slate-950/50 backdrop-blur-sm shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center font-bold text-lg shadow-md">
+            🎲
+          </div>
+          <div>
+            <h1 class="pixel-font text-xs sm:text-sm md:text-base text-amber-300 leading-tight">BLOCKY MATH RUNNER</h1>
+            <p class="text-[11px] sm:text-xs text-slate-300">Design your runner &amp; race through 5 worlds!</p>
+          </div>
+        </div>
+        <button id="mute-btn-setup" type="button" class="pixel-btn px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold flex items-center gap-1.5">
+          <span class="sound-icon">🔊</span>
+          <span class="hidden sm:inline sound-label">Sound On</span>
+        </button>
+      </header>
+
+      <!-- Main Customizer Grid -->
+      <main class="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+        <!-- Left: 3D Avatar Preview & Nickname -->
+        <section class="lg:col-span-5 flex flex-col bg-slate-900/80 border border-white/10 rounded-2xl p-4 shadow-xl">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-sky-300">3D Character Preview</span>
+            <span id="preview-nickname-badge" class="px-2.5 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-200 text-xs font-bold truncate max-w-[160px]">Runner 1</span>
+          </div>
+
+          <div class="relative flex-1 min-h-[220px] sm:min-h-[260px] rounded-xl overflow-hidden bg-gradient-to-b from-sky-400/20 via-indigo-500/15 to-slate-950 border border-white/10">
+            <canvas id="preview-canvas"></canvas>
+            <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+              <span class="text-[10px] text-slate-300/80 bg-slate-950/60 px-2 py-0.5 rounded">Drag to rotate</span>
+              <button id="randomize-avatar-btn" type="button" class="pointer-events-auto pixel-btn px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+                🎲 Randomize
+              </button>
+            </div>
+          </div>
+
+          <!-- Nickname Input -->
+          <div class="mt-3">
+            <label for="nickname-input" class="block text-xs font-bold text-slate-300 mb-1">Character Nickname</label>
+            <div class="flex gap-2">
+              <input
+                id="nickname-input"
+                type="text"
+                maxlength="16"
+                placeholder="Enter your nickname..."
+                value="PixelHero"
+                class="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-white text-sm font-semibold focus:outline-none focus:border-amber-400"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Right: Outfit & Game Settings -->
+        <section class="lg:col-span-7 flex flex-col gap-3 bg-slate-900/80 border border-white/10 rounded-2xl p-4 shadow-xl">
+          <!-- Avatar Presets -->
+          <div>
+            <div class="text-xs font-bold uppercase tracking-wider text-sky-300 mb-1.5">1. Choose Base Avatar</div>
+            <div id="preset-grid" class="grid grid-cols-3 sm:grid-cols-6 gap-2"></div>
+          </div>
+
+          <!-- Outfit Customization -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-white/10">
+            <div>
+              <div class="text-xs font-bold text-slate-300 mb-1">Skin Tone</div>
+              <div id="skin-swatches" class="flex flex-wrap gap-1.5"></div>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-300 mb-1">Shirt Color</div>
+              <div id="shirt-swatches" class="flex flex-wrap gap-1.5"></div>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-300 mb-1">Pants Color</div>
+              <div id="pants-swatches" class="flex flex-wrap gap-1.5"></div>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-300 mb-1">Shoes Color</div>
+              <div id="shoes-swatches" class="flex flex-wrap gap-1.5"></div>
+            </div>
+          </div>
+
+          <!-- Style & Accessories -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-white/10">
+            <div>
+              <label for="shirt-style-select" class="block text-xs font-bold text-slate-300 mb-1">Shirt Pattern</label>
+              <select id="shirt-style-select" class="w-full px-2.5 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs font-semibold text-white">
+                <option value="solid">Classic Solid</option>
+                <option value="stripes">Sport Stripes</option>
+                <option value="star">Star Badge</option>
+                <option value="hoodie">Pocket Hoodie</option>
+              </select>
+            </div>
+            <div>
+              <label for="hat-select" class="block text-xs font-bold text-slate-300 mb-1">Headgear / Hat</label>
+              <select id="hat-select" class="w-full px-2.5 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs font-semibold text-white">
+                <option value="none">None (Hair)</option>
+                <option value="cap">Pixel Cap</option>
+                <option value="crown">Gold Crown</option>
+                <option value="wizard">Wizard Hat</option>
+                <option value="headphones">Headphones</option>
+                <option value="helmet">Space Helmet</option>
+              </select>
+            </div>
+            <div>
+              <label for="back-select" class="block text-xs font-bold text-slate-300 mb-1">Back Gear</label>
+              <select id="back-select" class="w-full px-2.5 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs font-semibold text-white">
+                <option value="none">None</option>
+                <option value="backpack">School Backpack</option>
+                <option value="cape">Hero Cape</option>
+                <option value="wings">Pixel Wings</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Grade Difficulty Level -->
+          <div class="pt-1 border-t border-white/10">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-300">Student Grade Level (Difficulty)</span>
+              <span id="grade-rule-hint" class="text-[10px] font-semibold text-amber-300">+, −, ÷ (1–100) &bull; × (1–10)</span>
+            </div>
+            <div id="grade-group" class="grid grid-cols-3 gap-2">
+              <button type="button" data-grade="1-2" class="grade-btn px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 border border-white/10">
+                Grade 1–2
+              </button>
+              <button type="button" data-grade="3-4" class="grade-btn px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 border border-white/10">
+                Grade 3–4
+              </button>
+              <button type="button" data-grade="5-6" class="grade-btn px-2.5 py-2 rounded-xl text-xs font-bold bg-sky-400 text-slate-950 border border-sky-300">
+                Grade 5–6
+              </button>
+            </div>
+          </div>
+
+          <!-- Math Mode & Speed -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-white/10">
+            <div>
+              <div class="text-xs font-bold text-slate-300 mb-1">Math Topics</div>
+              <div id="op-filter-group" class="grid grid-cols-5 gap-1">
+                <button type="button" data-op="all" class="op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950">All</button>
+                <button type="button" data-op="add" class="op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700">+</button>
+                <button type="button" data-op="sub" class="op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700">−</button>
+                <button type="button" data-op="mul" class="op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700">×</button>
+                <button type="button" data-op="div" id="op-div-btn" class="op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700">÷</button>
+              </div>
+              <p id="topic-subhint" class="text-[10px] text-slate-400 mt-1">All 4 operations active</p>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-300 mb-1">Running Speed</div>
+              <div id="speed-group" class="grid grid-cols-3 gap-1.5">
+                <button type="button" data-speed="relaxed" class="speed-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700">Relaxed</button>
+                <button type="button" data-speed="normal" class="speed-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-emerald-400 text-slate-950">Normal</button>
+                <button type="button" data-speed="fast" class="speed-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700">Turbo</button>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-1">New world every 20 correct answers!</p>
+            </div>
+          </div>
+
+          <!-- Start Button -->
+          <div class="mt-auto pt-2">
+            <button id="start-game-btn" type="button" class="pixel-btn w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 pixel-font text-xs sm:text-sm tracking-wide">
+              ▶ START RUNNING!
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ==================== GAMEPLAY SCREEN ==================== -->
+    <div id="game-screen" class="hidden absolute inset-0 z-20">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Top HUD -->
+      <div class="absolute top-0 left-0 right-0 p-2.5 sm:p-4 pointer-events-none flex flex-col gap-2">
+        <div class="flex items-start justify-between gap-2">
+          <!-- Left: Player & Hearts -->
+          <div class="pointer-events-auto flex flex-col gap-1 bg-slate-950/75 backdrop-blur-md border border-white/15 rounded-xl px-3 py-2 shadow-lg">
+            <div class="flex items-center gap-2">
+              <span id="hud-nickname" class="text-xs sm:text-sm font-extrabold text-amber-300 truncate max-w-[120px] sm:max-w-[160px]">PixelHero</span>
+              <span id="hud-hearts" class="text-sm sm:text-base leading-none">❤️❤️❤️</span>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] font-bold text-slate-300">
+              <span>Score: <span id="hud-score" class="text-white">0</span></span>
+              <span class="text-slate-500">|</span>
+              <span>Streak: <span id="hud-streak" class="text-emerald-300">0</span>🔥</span>
+            </div>
+          </div>
+
+          <!-- Center: World Progress -->
+          <div class="hidden sm:flex flex-col items-center bg-slate-950/75 backdrop-blur-md border border-white/15 rounded-xl px-4 py-2 shadow-lg min-w-[210px]">
+            <div class="flex items-center gap-1.5 text-xs font-extrabold text-sky-300">
+              <span id="hud-world-icon">🌳</span>
+              <span id="hud-world-name">Sunny Meadow</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1.5 border border-white/10">
+              <div id="hud-world-bar" class="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div id="hud-world-progress-text" class="text-[10px] font-bold text-slate-300 mt-1">0 / 20 correct to next world</div>
+          </div>
+
+          <!-- Right: Controls -->
+          <div class="pointer-events-auto flex items-center gap-1.5">
+            <button id="mute-btn-game" type="button" class="pixel-btn w-10 h-10 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-white/20 flex items-center justify-center text-base" title="Toggle Sound">
+              <span class="sound-icon">🔊</span>
+            </button>
+            <button id="pause-btn" type="button" class="pixel-btn w-10 h-10 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-white/20 flex items-center justify-center text-sm font-bold" title="Pause">
+              ⏸
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile World Progress Pill -->
+        <div class="sm:hidden flex items-center justify-between bg-slate-950/70 backdrop-blur-sm border border-white/10 rounded-lg px-2.5 py-1 text-[11px]">
+          <span class="font-bold text-sky-300"><span id="hud-world-icon-mob">🌳</span> <span id="hud-world-name-mob">Sunny Meadow</span></span>
+          <span id="hud-world-progress-mob" class="font-bold text-amber-300">0/20</span>
+        </div>
+
+        <!-- Math Question Banner -->
+        <div class="flex justify-center mt-0.5">
+          <div id="question-card" class="bg-slate-950/85 backdrop-blur-md border-2 border-amber-400 rounded-2xl px-5 py-2.5 sm:px-8 sm:py-3 shadow-2xl text-center">
+            <div class="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-amber-300/90 mb-0.5">Solve &amp; Run to the Right Lane!</div>
+            <div id="question-text" class="pixel-font text-lg sm:text-2xl md:text-3xl text-white">12 + 8 = ?</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feedback Toast (Correct / Wrong / World Unlock) -->
+      <div id="feedback-toast" class="hidden absolute top-40 sm:top-44 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+        <div id="feedback-badge" class="animate-pop px-5 py-2.5 rounded-2xl font-extrabold text-sm sm:text-base shadow-2xl border-2 whitespace-nowrap"></div>
+      </div>
+
+      <!-- World Transition Overlay Banner -->
+      <div id="world-banner" class="hidden absolute inset-x-0 top-1/3 z-30 flex justify-center pointer-events-none px-4">
+        <div class="animate-banner bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 px-6 py-4 rounded-2xl border-4 border-white shadow-2xl text-center">
+          <div class="pixel-font text-xs sm:text-sm mb-1">NEW WORLD UNLOCKED!</div>
+          <div id="world-banner-title" class="text-lg sm:text-2xl font-black">🏜️ Desert Canyon</div>
+        </div>
+      </div>
+
+      <!-- Bottom Mobile/Tablet/Desktop Lane Controls -->
+      <div class="absolute bottom-3 sm:bottom-5 left-0 right-0 px-3 sm:px-6 flex items-center justify-between pointer-events-none">
+        <button id="btn-lane-left" type="button" class="pointer-events-auto pixel-btn w-20 h-16 sm:w-24 sm:h-16 rounded-2xl bg-slate-950/75 hover:bg-slate-900/90 border-2 border-white/25 text-white flex flex-col items-center justify-center gap-0.5 backdrop-blur-sm">
+          <span class="text-xl sm:text-2xl leading-none">⬅️</span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Left</span>
+        </button>
+
+        <div class="hidden md:flex items-center gap-2 bg-slate-950/60 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/10 text-xs text-slate-300 font-semibold">
+          <span>Use ◀ ▶ Arrow Keys, A / D, or Swipe</span>
+        </div>
+
+        <button id="btn-lane-right" type="button" class="pointer-events-auto pixel-btn w-20 h-16 sm:w-24 sm:h-16 rounded-2xl bg-slate-950/75 hover:bg-slate-900/90 border-2 border-white/25 text-white flex flex-col items-center justify-center gap-0.5 backdrop-blur-sm">
+          <span class="text-xl sm:text-2xl leading-none">➡️</span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300">Right</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== PAUSE MODAL ==================== -->
+    <div id="pause-modal" class="hidden absolute inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="w-full max-w-sm bg-slate-900 border-2 border-white/20 rounded-2xl p-6 text-center shadow-2xl">
+        <h2 class="pixel-font text-base text-amber-300 mb-2">GAME PAUSED</h2>
+        <p class="text-xs text-slate-300 mb-5">Take a breather! Ready to keep running?</p>
+        <div class="flex flex-col gap-2.5">
+          <button id="resume-btn" type="button" class="pixel-btn w-full py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-sm">
+            ▶ Resume Game
+          </button>
+          <button id="quit-to-setup-btn" type="button" class="pixel-btn w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 font-bold text-sm">
+            🎨 Back to Avatar Designer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== GAME OVER MODAL ==================== -->
+    <div id="gameover-modal" class="hidden absolute inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div class="w-full max-w-lg max-h-[92dvh] overflow-y-auto custom-scroll bg-slate-900 border-2 border-amber-400/60 rounded-2xl p-4 sm:p-6 text-center shadow-2xl animate-pop">
+        <div class="text-3xl mb-1">🏆</div>
+        <h2 class="pixel-font text-base sm:text-lg text-amber-300 mb-1">GREAT RUN!</h2>
+        <p id="go-player-line" class="text-xs sm:text-sm font-bold text-sky-300 mb-3">PixelHero's Math Adventure</p>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-left mb-3">
+          <div class="bg-slate-800/90 border border-white/10 rounded-xl p-2.5">
+            <div class="text-[10px] text-slate-400 font-semibold">Final Score</div>
+            <div id="go-score" class="text-lg font-black text-white">0</div>
+          </div>
+          <div class="bg-slate-800/90 border border-white/10 rounded-xl p-2.5">
+            <div class="text-[10px] text-slate-400 font-semibold">Correct</div>
+            <div id="go-correct" class="text-lg font-black text-emerald-400">0</div>
+          </div>
+          <div class="bg-slate-800/90 border border-white/10 rounded-xl p-2.5">
+            <div class="text-[10px] text-slate-400 font-semibold">Accuracy</div>
+            <div id="go-accuracy" class="text-lg font-black text-sky-300">0%</div>
+          </div>
+          <div class="bg-slate-800/90 border border-white/10 rounded-xl p-2.5">
+            <div class="text-[10px] text-slate-400 font-semibold">Best Streak</div>
+            <div id="go-streak" class="text-lg font-black text-amber-300">0🔥</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-white/10 rounded-xl px-3 py-1.5 mb-3 text-xs text-slate-300">
+          Furthest World: <span id="go-world" class="font-bold text-white">🌳 Sunny Meadow</span>
+        </div>
+
+        <!-- School-Wide Scoreboard -->
+        <div class="bg-slate-950/70 border border-white/15 rounded-xl p-3 mb-4 text-left">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-amber-300">🏫 School Scoreboard</span>
+            <div id="sb-filter-group" class="flex gap-1">
+              <button type="button" data-sb-filter="all" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-950">All</button>
+              <button type="button" data-sb-filter="1-2" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">Gr 1–2</button>
+              <button type="button" data-sb-filter="3-4" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">Gr 3–4</button>
+              <button type="button" data-sb-filter="5-6" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">Gr 5–6</button>
+            </div>
+          </div>
+          <div id="scoreboard-list" class="max-h-40 overflow-y-auto custom-scroll space-y-1.5 pr-1"></div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <button id="play-again-btn" type="button" class="pixel-btn flex-1 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-sm">
+            ↻ Play Again
+          </button>
+          <button id="customize-again-btn" type="button" class="pixel-btn flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold text-sm">
+            🎨 Edit Avatar
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ============================================================
+      // 1. WEB AUDIO SYNTHESIZER (Zero external sound files)
+      // ============================================================
+      const SoundFX = {
+        ctx: null,
+        muted: false,
+        ensureCtx() {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) this.ctx = new AudioCtx();
+          }
+          if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
+          }
+        },
+        playTone(freq, duration, type = 'square', gainVal = 0.08, delay = 0) {
+          if (this.muted) return;
+          this.ensureCtx();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime + delay;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(gainVal, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + duration + 0.01);
+        },
+        move() {
+          this.playTone(320, 0.06, 'triangle', 0.07);
+          this.playTone(440, 0.05, 'triangle', 0.05, 0.03);
+        },
+        correct() {
+          this.playTone(523.25, 0.09, 'square', 0.06, 0);
+          this.playTone(659.25, 0.09, 'square', 0.06, 0.07);
+          this.playTone(783.99, 0.14, 'square', 0.07, 0.14);
+        },
+        wrong() {
+          this.playTone(220, 0.14, 'sawtooth', 0.08, 0);
+          this.playTone(155, 0.22, 'sawtooth', 0.08, 0.11);
+        },
+        worldUp() {
+          const notes = [523.25, 659.25, 783.99, 1046.5];
+          notes.forEach((n, i) => this.playTone(n, 0.16, 'square', 0.07, i * 0.09));
+        },
+        gameOver() {
+          const notes = [392, 349.23, 329.63, 261.63];
+          notes.forEach((n, i) => this.playTone(n, 0.2, 'triangle', 0.09, i * 0.14));
+        },
+        bgmTimer: null,
+        bgmStep: 0,
+        bgmPlaying: false,
+        startBGM() {
+          if (this.bgmPlaying) return;
+          this.ensureCtx();
+          this.bgmPlaying = true;
+          const melody = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.00, 698.46, 523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 587.33, 659.25];
+          const bass =   [130.81, 130.81, 196.00, 196.00, 174.61, 174.61, 196.00, 196.00, 130.81, 130.81, 164.81, 164.81, 174.61, 196.00, 130.81, 196.00];
+          this.bgmTimer = setInterval(() => {
+            if (!this.bgmPlaying || this.muted) return;
+            const idx = this.bgmStep % melody.length;
+            this.playTone(melody[idx], 0.13, 'triangle', 0.028, 0);
+            if (idx % 2 === 0) {
+              this.playTone(bass[idx], 0.22, 'sine', 0.032, 0);
+            }
+            this.bgmStep++;
+          }, 220);
+        },
+        stopBGM() {
+          this.bgmPlaying = false;
+          if (this.bgmTimer) {
+            clearInterval(this.bgmTimer);
+            this.bgmTimer = null;
+          }
+        }
+      };
+
+      // ============================================================
+      // 2. AVATAR CONFIG & 5 WORLD THEMES
+      // ============================================================
+      const SKIN_COLORS = ['#f8d5b8', '#f0b88a', '#d48c5a', '#9c5c34', '#5c3824', '#86efac', '#93c5fd'];
+      const OUTFIT_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f8fafc', '#1e293b'];
+
+      const AVATAR_PRESETS = [
+        { id: 'explorer', name: 'Explorer', icon: '🧭', skin: '#f0b88a', shirt: '#22c55e', pants: '#3b82f6', shoes: '#1e293b', shirtStyle: 'hoodie', hat: 'cap', back: 'backpack' },
+        { id: 'robo', name: 'Robo', icon: '🤖', skin: '#93c5fd', shirt: '#3b82f6', pants: '#1e293b', shoes: '#06b6d4', shirtStyle: 'star', hat: 'headphones', back: 'wings' },
+        { id: 'dino', name: 'Dino', icon: '🦖', skin: '#86efac', shirt: '#16a34a', pants: '#eab308', shoes: '#f97316', shirtStyle: 'stripes', hat: 'none', back: 'cape' },
+        { id: 'wizard', name: 'Wizard', icon: '🧙', skin: '#f8d5b8', shirt: '#8b5cf6', pants: '#1e293b', shoes: '#eab308', shirtStyle: 'star', hat: 'wizard', back: 'cape' },
+        { id: 'astro', name: 'Astro', icon: '🚀', skin: '#d48c5a', shirt: '#f8fafc', pants: '#f97316', shoes: '#1e293b', shirtStyle: 'stripes', hat: 'helmet', back: 'backpack' },
+        { id: 'royal', name: 'Royal', icon: '👑', skin: '#9c5c34', shirt: '#ec4899', pants: '#8b5cf6', shoes: '#eab308', shirtStyle: 'solid', hat: 'crown', back: 'cape' }
+      ];
+
+      const WORLD_THEMES = [
+        {
+          name: 'Sunny Meadow',
+          icon: '🌳',
+          sky: 0x6ec6ff,
+          fog: 0x8ad6ff,
+          ground: 0x4ade80,
+          road: 0x64748b,
+          roadAlt: 0x475569,
+          curb: 0xfacc15,
+          propType: 'tree',
+          propPrimary: 0x16a34a,
+          propSecondary: 0x78350f,
+          gateFrame: 0xf59e0b
+        },
+        {
+          name: 'Desert Canyon',
+          icon: '🏜️',
+          sky: 0xfb923c,
+          fog: 0xfdba74,
+          ground: 0xfde047,
+          road: 0xb45309,
+          roadAlt: 0x92400e,
+          curb: 0xfef08a,
+          propType: 'cactus',
+          propPrimary: 0x15803d,
+          propSecondary: 0xd97706,
+          gateFrame: 0xea580c
+        },
+        {
+          name: 'Snowy Tundra',
+          icon: '❄️',
+          sky: 0xbae6fd,
+          fog: 0xe0f2fe,
+          ground: 0xf8fafc,
+          road: 0x38bdf8,
+          roadAlt: 0x0284c7,
+          curb: 0xffffff,
+          propType: 'pine',
+          propPrimary: 0x0f766e,
+          propSecondary: 0xffffff,
+          gateFrame: 0x0ea5e9
+        },
+        {
+          name: 'Neon City',
+          icon: '🌆',
+          sky: 0x0f172a,
+          fog: 0x1e1b4b,
+          ground: 0x1e293b,
+          road: 0x090d16,
+          roadAlt: 0x1e1b4b,
+          curb: 0xec4899,
+          propType: 'building',
+          propPrimary: 0x312e81,
+          propSecondary: 0x22d3ee,
+          gateFrame: 0xd946ef
+        },
+        {
+          name: 'Cosmic Space',
+          icon: '🚀',
+          sky: 0x020617,
+          fog: 0x090d16,
+          ground: 0x1e1b4b,
+          road: 0x334155,
+          roadAlt: 0x1e293b,
+          curb: 0x38bdf8,
+          propType: 'crystal',
+          propPrimary: 0x7c3aed,
+          propSecondary: 0x38bdf8,
+          gateFrame: 0x22d3ee
+        }
+      ];
+
+      const avatarConfig = {
+        nickname: 'PixelHero',
+        skin: '#f0b88a',
+        shirt: '#22c55e',
+        pants: '#3b82f6',
+        shoes: '#1e293b',
+        shirtStyle: 'hoodie',
+        hat: 'cap',
+        back: 'backpack'
+      };
+
+      const gameSettings = {
+        gradeLevel: '5-6', // '1-2' | '3-4' | '5-6'
+        opMode: 'all', // 'all' | 'add' | 'sub' | 'mul' | 'div'
+        speedMode: 'normal' // 'relaxed' | 'normal' | 'fast'
+      };
+
+      const SCOREBOARD_KEY = 'blocky_math_runner_scoreboard_v1';
+      let currentRunId = null;
+      let sbFilter = 'all';
+
+      function loadScoreboard() {
+        try {
+          const raw = localStorage.getItem(SCOREBOARD_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch (e) {}
+        return [
+          { id: 'seed-1', nickname: 'Maya', grade: '5-6', score: 2450, correct: 22, world: '🏜️ Desert Canyon' },
+          { id: 'seed-2', nickname: 'Leo', grade: '3-4', score: 1850, correct: 17, world: '🌳 Sunny Meadow' },
+          { id: 'seed-3', nickname: 'Siti', grade: '1-2', score: 1420, correct: 14, world: '🌳 Sunny Meadow' },
+          { id: 'seed-4', nickname: 'Budi', grade: '5-6', score: 3100, correct: 28, world: '🏜️ Desert Canyon' }
+        ];
+      }
+
+      function saveScoreboard(entries) {
+        try {
+          localStorage.setItem(SCOREBOARD_KEY, JSON.stringify(entries.slice(0, 50)));
+        } catch (e) {}
+      }
+
+      function recordScoreEntry(entry) {
+        const list = loadScoreboard();
+        list.push(entry);
+        list.sort((a, b) => b.score - a.score || b.correct - a.correct);
+        saveScoreboard(list);
+      }
+
+      function renderScoreboard() {
+        const container = document.getElementById('scoreboard-list');
+        if (!container) return;
+        const all = loadScoreboard();
+        const filtered = sbFilter === 'all' ? all : all.filter((item) => item.grade === sbFilter);
+        container.innerHTML = '';
+        if (filtered.length === 0) {
+          container.innerHTML = '<div class="text-xs text-slate-400 text-center py-4">No scores recorded for this grade yet. Be the first!</div>';
+          return;
+        }
+        filtered.slice(0, 15).forEach((item, idx) => {
+          const isMe = item.id === currentRunId;
+          const row = document.createElement('div');
+          row.className = isMe
+            ? 'flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-400/20 border border-amber-400 text-xs'
+            : 'flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-white/10 text-xs';
+          const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+          row.innerHTML = `
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-extrabold w-6 text-center shrink-0">${medal}</span>
+              <span class="font-bold text-white truncate">${item.nickname}</span>
+              ${isMe ? '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-black">YOU</span>' : ''}
+              <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 text-[10px] font-semibold shrink-0">Gr ${item.grade}</span>
+            </div>
+            <div class="flex items-center gap-2.5 shrink-0">
+              <span class="hidden sm:inline text-[10px] text-slate-400">${item.correct} ✓</span>
+              <span class="font-black text-emerald-300">${item.score}</span>
+            </div>
+          `;
+          container.appendChild(row);
+        });
+      }
+
+      // ============================================================
+      // 3. BLOCKY PIXEL TEXTURES & 3D CHARACTER BUILDER
+      // ============================================================
+      function makeFaceTexture(skinHex) {
+        const c = document.createElement('canvas');
+        c.width = 16;
+        c.height = 16;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = skinHex;
+        ctx.fillRect(0, 0, 16, 16);
+        // Hair fringe at top
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 16, 3);
+        ctx.fillRect(0, 3, 2, 2);
+        ctx.fillRect(14, 3, 2, 2);
+        // Eyes
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(3, 6, 3, 3);
+        ctx.fillRect(10, 6, 3, 3);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(4, 7, 2, 2);
+        ctx.fillRect(10, 7, 2, 2);
+        // Smile
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(6, 12, 4, 1);
+        ctx.fillRect(5, 11, 1, 1);
+        ctx.fillRect(10, 11, 1, 1);
+        const tex = new THREE.CanvasTexture(c);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        return tex;
+      }
+
+      function makeShirtTexture(shirtHex, style) {
+        const c = document.createElement('canvas');
+        c.width = 16;
+        c.height = 16;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = shirtHex;
+        ctx.fillRect(0, 0, 16, 16);
+
+        if (style === 'stripes') {
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.fillRect(0, 4, 16, 2);
+          ctx.fillRect(0, 10, 16, 2);
+        } else if (style === 'star') {
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(7, 4, 2, 7);
+          ctx.fillRect(4, 6, 8, 2);
+          ctx.fillRect(5, 9, 2, 2);
+          ctx.fillRect(9, 9, 2, 2);
+        } else if (style === 'hoodie') {
+          ctx.fillStyle = 'rgba(0,0,0,0.22)';
+          ctx.fillRect(4, 10, 8, 4);
+          ctx.fillStyle = 'rgba(255,255,255,0.65)';
+          ctx.fillRect(6, 1, 1, 5);
+          ctx.fillRect(9, 1, 1, 5);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        return tex;
+      }
+
+      function buildBlockyCharacter(cfg) {
+        const root = new THREE.Group();
+
+        const skinMat = new THREE.MeshLambertMaterial({ color: cfg.skin });
+        const faceMat = new THREE.MeshLambertMaterial({ map: makeFaceTexture(cfg.skin) });
+        const shirtFrontMat = new THREE.MeshLambertMaterial({ map: makeShirtTexture(cfg.shirt, cfg.shirtStyle) });
+        const shirtSideMat = new THREE.MeshLambertMaterial({ color: cfg.shirt });
+        const pantsMat = new THREE.MeshLambertMaterial({ color: cfg.pants });
+        const shoesMat = new THREE.MeshLambertMaterial({ color: cfg.shoes });
+        const hairMat = new THREE.MeshLambertMaterial({ color: '#1e293b' });
+
+        // Head Group
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 1.55, 0);
+        const headMaterials = [skinMat, skinMat, hairMat, skinMat, faceMat, hairMat];
+        const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.72), headMaterials);
+        headMesh.castShadow = true;
+        headGroup.add(headMesh);
+
+        // Hats
+        if (cfg.hat === 'cap') {
+          const capTop = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.24, 0.76), new THREE.MeshLambertMaterial({ color: '#ef4444' }));
+          capTop.position.set(0, 0.34, 0);
+          const brim = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.08, 0.35), new THREE.MeshLambertMaterial({ color: '#dc2626' }));
+          brim.position.set(0, 0.24, 0.45);
+          headGroup.add(capTop, brim);
+        } else if (cfg.hat === 'crown') {
+          const goldMat = new THREE.MeshLambertMaterial({ color: '#facc15' });
+          const band = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.16, 0.76), goldMat);
+          band.position.set(0, 0.38, 0);
+          headGroup.add(band);
+          [-0.25, 0, 0.25].forEach((px) => {
+            const spike = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.18, 0.14), goldMat);
+            spike.position.set(px, 0.54, 0.28);
+            headGroup.add(spike);
+          });
+        } else if (cfg.hat === 'wizard') {
+          const wizMat = new THREE.MeshLambertMaterial({ color: '#7c3aed' });
+          const brim = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.1, 1.05), wizMat);
+          brim.position.set(0, 0.34, 0);
+          const cone1 = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.35, 0.62), wizMat);
+          cone1.position.set(0, 0.54, 0);
+          const cone2 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.32, 0.36), wizMat);
+          cone2.position.set(0, 0.84, -0.05);
+          headGroup.add(brim, cone1, cone2);
+        } else if (cfg.hat === 'headphones') {
+          const hpMat = new THREE.MeshLambertMaterial({ color: '#06b6d4' });
+          const arc = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.12, 0.18), hpMat);
+          arc.position.set(0, 0.42, 0);
+          const earL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.34), hpMat);
+          earL.position.set(-0.42, 0.04, 0);
+          const earR = earL.clone();
+          earR.position.set(0.42, 0.04, 0);
+          headGroup.add(arc, earL, earR);
+        } else if (cfg.hat === 'helmet') {
+          const helmMat = new THREE.MeshLambertMaterial({ color: '#f8fafc' });
+          const visorMat = new THREE.MeshLambertMaterial({ color: '#38bdf8' });
+          const shell = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.84, 0.84), helmMat);
+          shell.position.set(0, 0.04, -0.02);
+          const visor = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.36, 0.1), visorMat);
+          visor.position.set(0, 0.06, 0.41);
+          headGroup.add(shell, visor);
+        }
+
+        root.add(headGroup);
+
+        // Torso
+        const torsoMaterials = [shirtSideMat, shirtSideMat, shirtSideMat, shirtSideMat, shirtFrontMat, shirtSideMat];
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.78, 0.42), torsoMaterials);
+        torso.position.set(0, 0.8, 0);
+        torso.castShadow = true;
+        root.add(torso);
+
+        // Back Gear (positioned on -Z since character faces +Z in local space; in game we rotate root PI so character faces -Z!)
+        if (cfg.back === 'backpack') {
+          const pack = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.58, 0.26), new THREE.MeshLambertMaterial({ color: '#f97316' }));
+          pack.position.set(0, 0.82, -0.32);
+          root.add(pack);
+        } else if (cfg.back === 'cape') {
+          const cape = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.9, 0.08), new THREE.MeshLambertMaterial({ color: '#dc2626' }));
+          cape.position.set(0, 0.68, -0.26);
+          cape.rotation.x = 0.14;
+          root.add(cape);
+        } else if (cfg.back === 'wings') {
+          const wingMat = new THREE.MeshLambertMaterial({ color: '#38bdf8' });
+          const wL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.52, 0.08), wingMat);
+          wL.position.set(-0.46, 0.92, -0.28);
+          wL.rotation.y = -0.35;
+          const wR = wL.clone();
+          wR.position.set(0.46, 0.92, -0.28);
+          wR.rotation.y = 0.35;
+          root.add(wL, wR);
+        }
+
+        // Arms
+        function makeArm(x) {
+          const pivot = new THREE.Group();
+          pivot.position.set(x, 1.12, 0);
+          const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.36, 0.26), shirtSideMat);
+          sleeve.position.set(0, -0.18, 0);
+          const hand = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 0.24), skinMat);
+          hand.position.set(0, -0.5, 0);
+          pivot.add(sleeve, hand);
+          return pivot;
+        }
+        const leftArm = makeArm(-0.5);
+        const rightArm = makeArm(0.5);
+        root.add(leftArm, rightArm);
+
+        // Legs
+        function makeLeg(x) {
+          const pivot = new THREE.Group();
+          pivot.position.set(x, 0.42, 0);
+          const pant = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.44, 0.34), pantsMat);
+          pant.position.set(0, -0.22, 0);
+          const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.42), shoesMat);
+          shoe.position.set(0, -0.52, 0.04);
+          pivot.add(pant, shoe);
+          return pivot;
+        }
+        const leftLeg = makeLeg(-0.19);
+        const rightLeg = makeLeg(0.19);
+        root.add(leftLeg, rightLeg);
+
+        return { root, headGroup, leftArm, rightArm, leftLeg, rightLeg };
+      }
+
+      // ============================================================
+      // 4. AVATAR PREVIEW SCENE (SETUP SCREEN)
+      // ============================================================
+      const previewCanvas = document.getElementById('preview-canvas');
+      const previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, alpha: true, antialias: true });
+      const previewScene = new THREE.Scene();
+      const previewCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 50);
+      previewCamera.position.set(0, 1.2, 4.1);
+      previewCamera.lookAt(0, 0.95, 0);
+
+      previewScene.add(new THREE.AmbientLight(0xffffff, 0.78));
+      const pDir = new THREE.DirectionalLight(0xffffff, 0.75);
+      pDir.position.set(3, 5, 4);
+      previewScene.add(pDir);
+
+      // Pedestal
+      const pedestal = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.2, 1.9),
+        new THREE.MeshLambertMaterial({ color: 0x334155 })
+      );
+      pedestal.position.set(0, -0.2, 0);
+      previewScene.add(pedestal);
+
+      let previewChar = null;
+      let previewAngle = 0.35;
+      let isDraggingPreview = false;
+      let lastPointerX = 0;
+
+      function rebuildPreviewCharacter() {
+        if (previewChar) {
+          previewScene.remove(previewChar.root);
+        }
+        previewChar = buildBlockyCharacter(avatarConfig);
+        previewChar.root.position.set(0, 0.02, 0);
+        previewChar.root.rotation.y = previewAngle;
+        previewScene.add(previewChar.root);
+      }
+
+      function resizePreview() {
+        const parent = previewCanvas.parentElement;
+        if (!parent) return;
+        const w = parent.clientWidth || 300;
+        const h = parent.clientHeight || 240;
+        previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        previewRenderer.setSize(w, h, false);
+        previewCamera.aspect = w / h;
+        previewCamera.updateProjectionMatrix();
+      }
+
+      previewCanvas.addEventListener('pointerdown', (e) => {
+        isDraggingPreview = true;
+        lastPointerX = e.clientX;
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (!isDraggingPreview) return;
+        const dx = e.clientX - lastPointerX;
+        lastPointerX = e.clientX;
+        previewAngle += dx * 0.015;
+      });
+      window.addEventListener('pointerup', () => {
+        isDraggingPreview = false;
+      });
+
+      // ============================================================
+      // 5. MATH QUESTION GENERATOR (STRICT RANGES)
+      // ============================================================
+      function randInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function generateMathQuestion(opMode, gradeLevel) {
+        const allowedOps = gradeLevel === '1-2' ? ['add', 'sub', 'mul'] : ['add', 'sub', 'mul', 'div'];
+        const effectiveMode = allowedOps.includes(opMode) ? opMode : 'all';
+        const ops = effectiveMode === 'all' ? allowedOps : [effectiveMode];
+        const op = ops[randInt(0, ops.length - 1)];
+
+        let a = 1, b = 1, ans = 2, symbol = '+';
+
+        if (op === 'add') {
+          // 1 to 100 for all grades
+          a = randInt(1, 100);
+          b = randInt(1, 100);
+          ans = a + b;
+          symbol = '+';
+        } else if (op === 'sub') {
+          // 1 to 100, non-negative result for all grades
+          a = randInt(1, 100);
+          b = randInt(1, a);
+          ans = a - b;
+          symbol = '−';
+        } else if (op === 'mul') {
+          // Grade 1-2: 1 to 5; Grade 3-6: 1 to 10
+          const maxMul = gradeLevel === '1-2' ? 5 : 10;
+          a = randInt(1, maxMul);
+          b = randInt(1, maxMul);
+          ans = a * b;
+          symbol = '×';
+        } else if (op === 'div') {
+          // Grade 3-4: 1 to 50; Grade 5-6: 1 to 100 (clean whole-number division)
+          const maxDiv = gradeLevel === '3-4' ? 50 : 100;
+          const divisors = [];
+          for (let d = 2; d <= Math.floor(maxDiv / 2); d++) {
+            if (Math.floor(maxDiv / d) >= 2) divisors.push(d);
+          }
+          if (Math.random() < 0.9 && divisors.length > 0) {
+            b = divisors[randInt(0, divisors.length - 1)];
+            ans = randInt(2, Math.floor(maxDiv / b));
+            a = b * ans;
+          } else {
+            b = randInt(1, maxDiv);
+            ans = randInt(1, Math.floor(maxDiv / b));
+            a = b * ans;
+          }
+          symbol = '÷';
+        }
+
+        const text = `${a} ${symbol} ${b} = ?`;
+
+        // Generate 2 unique distractors close to ans
+        const wrongSet = new Set();
+        let guard = 0;
+        while (wrongSet.size < 2 && guard < 60) {
+          guard++;
+          let offset = randInt(1, 10) * (Math.random() < 0.5 ? 1 : -1);
+          if (ans > 20 && Math.random() < 0.3) {
+            offset = 10 * (Math.random() < 0.5 ? 1 : -1);
+          }
+          const candidate = ans + offset;
+          if (candidate >= 0 && candidate !== ans) {
+            wrongSet.add(candidate);
+          }
+        }
+        while (wrongSet.size < 2) {
+          wrongSet.add(ans + wrongSet.size + 1);
+        }
+
+        const wrongs = Array.from(wrongSet);
+        const correctLane = randInt(0, 2); // 0 = Left, 1 = Center, 2 = Right
+        const choices = [0, 0, 0];
+        let wi = 0;
+        for (let i = 0; i < 3; i++) {
+          if (i === correctLane) choices[i] = ans;
+          else choices[i] = wrongs[wi++];
+        }
+
+        return { text, answer: ans, choices, correctLane };
+      }
+
+      // ============================================================
+      // 6. 3D GAMEPLAY ENGINE (SUBWAY-SURFERS BEHIND-PERSON POV)
+      // ============================================================
+      const gameCanvas = document.getElementById('game-canvas');
+      const gameRenderer = new THREE.WebGLRenderer({ canvas: gameCanvas, antialias: true });
+      const gameScene = new THREE.Scene();
+      const gameCamera = new THREE.PerspectiveCamera(58, 1, 0.1, 140);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.72);
+      gameScene.add(ambientLight);
+      const sunLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      sunLight.position.set(8, 18, 10);
+      gameScene.add(sunLight);
+
+      const LANE_X = [-2.6, 0, 2.6];
+      const TRACK_LEN = 110;
+
+      // Dynamic World Groups
+      const trackGroup = new THREE.Group();
+      const propsGroup = new THREE.Group();
+      const gatesGroup = new THREE.Group();
+      const particlesGroup = new THREE.Group();
+      gameScene.add(trackGroup, propsGroup, gatesGroup, particlesGroup);
+
+      let playerChar = null;
+      let roadTiles = [];
+      let sideGrounds = [];
+      let worldProps = [];
+      let activeWave = null;
+      let particles = [];
+
+      // Gameplay State
+      const state = {
+        running: false,
+        paused: false,
+        gameOver: false,
+        lane: 1, // 0, 1, 2
+        playerX: 0,
+        hearts: 3,
+        score: 0,
+        correctCount: 0,
+        totalAnswered: 0,
+        streak: 0,
+        bestStreak: 0,
+        worldIndex: 0,
+        furthestWorld: 0,
+        runTime: 0,
+        shakeTime: 0,
+        currentQuestion: null
+      };
+
+      function getBaseSpeed() {
+        const base = gameSettings.speedMode === 'relaxed' ? 11.5 : gameSettings.speedMode === 'fast' ? 17.5 : 14.2;
+        const bonus = Math.min(state.worldIndex * 0.9, 4.5);
+        return base + bonus;
+      }
+
+      function makeAnswerSignTexture(num) {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 160;
+        const ctx = c.getContext('2d');
+
+        // Dark pixel card background
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, 256, 160);
+        // Inner border
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 10;
+        ctx.strokeRect(8, 8, 240, 144);
+        // Text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 74px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(num), 128, 84);
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.minFilter = THREE.LinearFilter;
+        return tex;
+      }
+
+      function buildTrackEnvironment() {
+        trackGroup.clear();
+        propsGroup.clear();
+        roadTiles = [];
+        sideGrounds = [];
+        worldProps = [];
+
+        const theme = WORLD_THEMES[state.worldIndex];
+        gameScene.background = new THREE.Color(theme.sky);
+        gameScene.fog = new THREE.Fog(theme.fog, 32, 92);
+
+        // Tiled Road Segments (for sense of speed)
+        const segLen = 8;
+        const numSegs = 14;
+        for (let i = 0; i < numSegs; i++) {
+          const z = 8 - i * segLen;
+          const isAlt = i % 2 === 0;
+          const roadMat = new THREE.MeshLambertMaterial({ color: isAlt ? theme.road : theme.roadAlt });
+          const road = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.3, segLen), roadMat);
+          road.position.set(0, -0.15, z);
+          trackGroup.add(road);
+
+          // Lane dividers
+          const divMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 });
+          const divL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.32, segLen * 0.55), divMat);
+          divL.position.set(-1.3, -0.14, z);
+          const divR = divL.clone();
+          divR.position.set(1.3, -0.14, z);
+          trackGroup.add(divL, divR);
+
+          // Curbs
+          const curbMat = new THREE.MeshLambertMaterial({ color: theme.curb });
+          const curbL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.42, segLen), curbMat);
+          curbL.position.set(-4.45, -0.08, z);
+          const curbR = curbL.clone();
+          curbR.position.set(4.45, -0.08, z);
+          trackGroup.add(curbL, curbR);
+
+          // Side ground strips
+          const groundMat = new THREE.MeshLambertMaterial({ color: theme.ground });
+          const gL = new THREE.Mesh(new THREE.BoxGeometry(32, 0.25, segLen), groundMat);
+          gL.position.set(-20.6, -0.2, z);
+          const gR = gL.clone();
+          gR.position.set(20.6, -0.2, z);
+          trackGroup.add(gL, gR);
+
+          roadTiles.push({ z, meshes: [road, divL, divR, curbL, curbR, gL, gR] });
+        }
+
+        // Side Props (Trees, Cacti, Pines, Neon Buildings, Space Crystals)
+        for (let i = 0; i < 22; i++) {
+          const z = 6 - i * 5;
+          [-1, 1].forEach((side) => {
+            const prop = createWorldProp(theme);
+            prop.position.set(side * (6.2 + Math.random() * 5.5), 0, z);
+            propsGroup.add(prop);
+            worldProps.push(prop);
+          });
+        }
+      }
+
+      function createWorldProp(theme) {
+        const g = new THREE.Group();
+        const p1 = new THREE.MeshLambertMaterial({ color: theme.propPrimary });
+        const p2 = new THREE.MeshLambertMaterial({ color: theme.propSecondary });
+
+        if (theme.propType === 'tree') {
+          const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.8, 0.65), p2);
+          trunk.position.y = 0.9;
+          const leaves = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.0, 2.1), p1);
+          leaves.position.y = 2.6;
+          g.add(trunk, leaves);
+        } else if (theme.propType === 'cactus') {
+          const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.5, 0.6), p1);
+          body.position.y = 1.25;
+          const armL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.45), p1);
+          armL.position.set(-0.5, 1.5, 0);
+          const armTip = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.85, 0.45), p1);
+          armTip.position.set(-0.7, 1.9, 0);
+          g.add(body, armL, armTip);
+        } else if (theme.propType === 'pine') {
+          const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.2, 0.55), new THREE.MeshLambertMaterial({ color: 0x78350f }));
+          trunk.position.y = 0.6;
+          const tier1 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 2.2), p1);
+          tier1.position.y = 1.6;
+          const tier2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.4), p2);
+          tier2.position.y = 2.65;
+          g.add(trunk, tier1, tier2);
+        } else if (theme.propType === 'building') {
+          const h = 4 + Math.random() * 5;
+          const bldg = new THREE.Mesh(new THREE.BoxGeometry(2.4, h, 2.4), p1);
+          bldg.position.y = h / 2;
+          const neon = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.35, 2.5), p2);
+          neon.position.y = h - 0.5;
+          g.add(bldg, neon);
+        } else {
+          const h = 2.2 + Math.random() * 2.5;
+          const crystal = new THREE.Mesh(new THREE.BoxGeometry(0.95, h, 0.95), p1);
+          crystal.position.y = h / 2;
+          crystal.rotation.y = 0.5;
+          const tip = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 0.65), p2);
+          tip.position.y = h + 0.25;
+          g.add(crystal, tip);
+        }
+        return g;
+      }
+
+      function spawnNextWave() {
+        gatesGroup.clear();
+        const q = generateMathQuestion(gameSettings.opMode, gameSettings.gradeLevel);
+        state.currentQuestion = q;
+        document.getElementById('question-text').textContent = q.text;
+
+        const theme = WORLD_THEMES[state.worldIndex];
+        const frameMat = new THREE.MeshLambertMaterial({ color: theme.gateFrame });
+        const waveGroup = new THREE.Group();
+        waveGroup.position.set(0, 0, -68);
+
+        for (let i = 0; i < 3; i++) {
+          const x = LANE_X[i];
+          const gate = new THREE.Group();
+          gate.position.set(x, 0, 0);
+
+          // Left & Right Pillars
+          const pL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 2.6, 0.28), frameMat);
+          pL.position.set(-1.02, 1.3, 0);
+          const pR = pL.clone();
+          pR.position.set(1.02, 1.3, 0);
+          const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.32, 0.26, 0.3), frameMat);
+          topBar.position.set(0, 2.6, 0);
+
+          // Answer Sign Board
+          const signMat = new THREE.MeshBasicMaterial({ map: makeAnswerSignTexture(q.choices[i]) });
+          const sign = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.1, 0.14), signMat);
+          sign.position.set(0, 1.85, 0);
+
+          gate.add(pL, pR, topBar, sign);
+          waveGroup.add(gate);
+        }
+
+        gatesGroup.add(waveGroup);
+        activeWave = {
+          group: waveGroup,
+          z: -68,
+          question: q,
+          resolved: false
+        };
+      }
+
+      function spawnBurstParticles(x, y, z, colorHex) {
+        const mat = new THREE.MeshLambertMaterial({ color: colorHex });
+        for (let i = 0; i < 16; i++) {
+          const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mat);
+          p.position.set(x, y, z);
+          particlesGroup.add(p);
+          particles.push({
+            mesh: p,
+            vx: (Math.random() - 0.5) * 8,
+            vy: 2 + Math.random() * 6,
+            vz: (Math.random() - 0.5) * 6,
+            life: 0.65
+          });
+        }
+      }
+
+      let toastTimer = null;
+      function showToast(msg, isSuccess) {
+        const container = document.getElementById('feedback-toast');
+        const badge = document.getElementById('feedback-badge');
+        badge.textContent = msg;
+        badge.className = isSuccess
+          ? 'animate-pop px-5 py-2.5 rounded-2xl font-extrabold text-sm sm:text-base shadow-2xl border-2 whitespace-nowrap bg-emerald-400 text-slate-950 border-white'
+          : 'animate-pop px-5 py-2.5 rounded-2xl font-extrabold text-sm sm:text-base shadow-2xl border-2 whitespace-nowrap bg-rose-500 text-white border-rose-200';
+        container.classList.remove('hidden');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => container.classList.add('hidden'), 1350);
+      }
+
+      let worldBannerTimer = null;
+      function showWorldBanner(theme) {
+        const banner = document.getElementById('world-banner');
+        document.getElementById('world-banner-title').textContent = `${theme.icon} ${theme.name}`;
+        banner.classList.remove('hidden');
+        clearTimeout(worldBannerTimer);
+        worldBannerTimer = setTimeout(() => banner.classList.add('hidden'), 2400);
+      }
+
+      function updateHUD() {
+        document.getElementById('hud-nickname').textContent = avatarConfig.nickname || 'Runner';
+        document.getElementById('hud-hearts').textContent = '❤️'.repeat(Math.max(0, state.hearts)) + '🖤'.repeat(Math.max(0, 3 - state.hearts));
+        document.getElementById('hud-score').textContent = state.score;
+        document.getElementById('hud-streak').textContent = state.streak;
+
+        const theme = WORLD_THEMES[state.worldIndex];
+        const progressInWorld = state.correctCount % 20;
+        const pct = (progressInWorld / 20) * 100;
+
+        document.getElementById('hud-world-icon').textContent = theme.icon;
+        document.getElementById('hud-world-name').textContent = theme.name;
+        document.getElementById('hud-world-bar').style.width = `${pct}%`;
+        document.getElementById('hud-world-progress-text').textContent = `${progressInWorld} / 20 correct to next world`;
+
+        document.getElementById('hud-world-icon-mob').textContent = theme.icon;
+        document.getElementById('hud-world-name-mob').textContent = theme.name;
+        document.getElementById('hud-world-progress-mob').textContent = `${progressInWorld}/20`;
+      }
+
+      function startNewGame() {
+        SoundFX.ensureCtx();
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('gameover-modal').classList.add('hidden');
+        document.getElementById('pause-modal').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+
+        state.running = true;
+        state.paused = false;
+        state.gameOver = false;
+        state.lane = 1;
+        state.playerX = LANE_X[1];
+        state.hearts = 3;
+        state.score = 0;
+        state.correctCount = 0;
+        state.totalAnswered = 0;
+        state.streak = 0;
+        state.bestStreak = 0;
+        state.worldIndex = 0;
+        state.furthestWorld = 0;
+        state.runTime = 0;
+        state.shakeTime = 0;
+
+        if (playerChar) gameScene.remove(playerChar.root);
+        playerChar = buildBlockyCharacter(avatarConfig);
+        // Rotate 180 deg so character's back faces camera (behind-person POV!)
+        playerChar.root.rotation.y = Math.PI;
+        playerChar.root.position.set(0, 0, 0);
+        gameScene.add(playerChar.root);
+
+        particlesGroup.clear();
+        particles = [];
+
+        resizeGame();
+        buildTrackEnvironment();
+        spawnNextWave();
+        updateHUD();
+        SoundFX.startBGM();
+      }
+
+      function triggerGameOver() {
+        state.running = false;
+        state.gameOver = true;
+        SoundFX.stopBGM();
+        SoundFX.gameOver();
+
+        const acc = state.totalAnswered > 0 ? Math.round((state.correctCount / state.totalAnswered) * 100) : 0;
+        const bestTheme = WORLD_THEMES[state.furthestWorld];
+        const worldLabel = `${bestTheme.icon} ${bestTheme.name}`;
+
+        currentRunId = 'run-' + Date.now();
+        recordScoreEntry({
+          id: currentRunId,
+          nickname: avatarConfig.nickname || 'Runner',
+          grade: gameSettings.gradeLevel,
+          score: state.score,
+          correct: state.correctCount,
+          world: worldLabel
+        });
+        renderScoreboard();
+
+        document.getElementById('go-player-line').textContent = `${avatarConfig.nickname} (Grade ${gameSettings.gradeLevel})`;
+        document.getElementById('go-score').textContent = state.score;
+        document.getElementById('go-correct').textContent = state.correctCount;
+        document.getElementById('go-accuracy').textContent = `${acc}%`;
+        document.getElementById('go-streak').textContent = `${state.bestStreak}🔥`;
+        document.getElementById('go-world').textContent = worldLabel;
+        document.getElementById('gameover-modal').classList.remove('hidden');
+      }
+
+      function moveLane(dir) {
+        if (!state.running || state.paused || state.gameOver) return;
+        const next = Math.max(0, Math.min(2, state.lane + dir));
+        if (next !== state.lane) {
+          state.lane = next;
+          SoundFX.move();
+        }
+      }
+
+      function resizeGame() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        gameRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        gameRenderer.setSize(w, h, false);
+        gameCamera.aspect = w / h;
+        gameCamera.updateProjectionMatrix();
+      }
+
+      // ============================================================
+      // 7. MAIN ANIMATION LOOP
+      // ============================================================
+      let lastTime = performance.now();
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
+
+        // Render Setup Preview if visible
+        if (!document.getElementById('setup-screen').classList.contains('hidden')) {
+          if (!isDraggingPreview) previewAngle += dt * 0.65;
+          if (previewChar) {
+            previewChar.root.rotation.y = previewAngle;
+            const idleT = now * 0.004;
+            previewChar.leftArm.rotation.x = Math.sin(idleT) * 0.25;
+            previewChar.rightArm.rotation.x = -Math.sin(idleT) * 0.25;
+            previewChar.leftLeg.rotation.x = -Math.sin(idleT) * 0.2;
+            previewChar.rightLeg.rotation.x = Math.sin(idleT) * 0.2;
+          }
+          previewRenderer.render(previewScene, previewCamera);
+        }
+
+        // Render Gameplay if active
+        if (!document.getElementById('game-screen').classList.contains('hidden')) {
+          if (state.running && !state.paused && !state.gameOver) {
+            const speed = getBaseSpeed();
+            state.runTime += dt;
+
+            // Smooth lane interpolation + slight bank tilt
+            const targetX = LANE_X[state.lane];
+            const diffX = targetX - state.playerX;
+            state.playerX += diffX * Math.min(1, dt * 14);
+            if (playerChar) {
+              playerChar.root.position.x = state.playerX;
+              const stride = state.runTime * (speed * 0.85);
+              playerChar.root.position.y = Math.abs(Math.sin(stride)) * 0.14;
+              playerChar.root.rotation.z = -diffX * 0.09;
+              playerChar.leftLeg.rotation.x = Math.sin(stride) * 0.85;
+              playerChar.rightLeg.rotation.x = -Math.sin(stride) * 0.85;
+              playerChar.leftArm.rotation.x = -Math.sin(stride) * 0.75;
+              playerChar.rightArm.rotation.x = Math.sin(stride) * 0.75;
+            }
+
+            // Scroll road tiles
+            const totalTrackLen = 14 * 8;
+            roadTiles.forEach((tile) => {
+              tile.z += speed * dt;
+              if (tile.z > 14) tile.z -= totalTrackLen;
+              tile.meshes.forEach((m) => { m.position.z = tile.z; });
+            });
+
+            // Scroll side props
+            worldProps.forEach((prop) => {
+              prop.position.z += speed * dt;
+              if (prop.position.z > 12) prop.position.z -= 110;
+            });
+
+            // Move Math Gate Wave
+            if (activeWave) {
+              activeWave.z += speed * dt;
+              activeWave.group.position.z = activeWave.z;
+
+              // Check collision at player Z = 0
+              if (!activeWave.resolved && activeWave.z >= -0.35) {
+                activeWave.resolved = true;
+                state.totalAnswered++;
+                const q = activeWave.question;
+
+                if (state.lane === q.correctLane) {
+                  state.correctCount++;
+                  state.streak++;
+                  if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+                  const pts = 100 + Math.min(state.streak - 1, 10) * 15;
+                  state.score += pts;
+                  SoundFX.correct();
+                  spawnBurstParticles(state.playerX, 1.2, 0, 0x4ade80);
+                  showToast(`+${pts} Correct!`, true);
+
+                  // Every 20 correct answers -> Change World Theme!
+                  if (state.correctCount > 0 && state.correctCount % 20 === 0) {
+                    state.worldIndex = Math.floor(state.correctCount / 20) % WORLD_THEMES.length;
+                    if (state.worldIndex > state.furthestWorld) state.furthestWorld = state.worldIndex;
+                    const nextTheme = WORLD_THEMES[state.worldIndex];
+                    SoundFX.worldUp();
+                    buildTrackEnvironment();
+                    showWorldBanner(nextTheme);
+                  }
+                } else {
+                  state.hearts--;
+                  state.streak = 0;
+                  state.shakeTime = 0.35;
+                  SoundFX.wrong();
+                  spawnBurstParticles(state.playerX, 1.2, 0, 0xf43f5e);
+                  const cleanQ = q.text.replace('= ?', `= ${q.answer}`);
+                  showToast(`Oops! ${cleanQ}`, false);
+                }
+
+                updateHUD();
+
+                if (state.hearts <= 0) {
+                  triggerGameOver();
+                } else {
+                  setTimeout(() => {
+                    if (state.running && !state.gameOver) spawnNextWave();
+                  }, 180);
+                }
+              }
+            }
+
+            // Update particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+              const p = particles[i];
+              p.life -= dt;
+              p.vy -= 18 * dt;
+              p.mesh.position.x += p.vx * dt;
+              p.mesh.position.y += p.vy * dt;
+              p.mesh.position.z += p.vz * dt;
+              p.mesh.scale.setScalar(Math.max(0.01, p.life * 1.4));
+              if (p.life <= 0) {
+                particlesGroup.remove(p.mesh);
+                particles.splice(i, 1);
+              }
+            }
+
+            // Camera Chase + Shake
+            let shakeX = 0, shakeY = 0;
+            if (state.shakeTime > 0) {
+              state.shakeTime -= dt;
+              shakeX = (Math.random() - 0.5) * 0.45;
+              shakeY = (Math.random() - 0.5) * 0.35;
+            }
+            gameCamera.position.set(state.playerX * 0.55 + shakeX, 3.6 + shakeY, 6.2);
+            gameCamera.lookAt(state.playerX * 0.35, 1.5, -10);
+          }
+
+          gameRenderer.render(gameScene, gameCamera);
+        }
+      }
+
+      // ============================================================
+      // 8. UI WIRING (CUSTOMIZER, KEYBOARD, TOUCH SWIPE & BUTTONS)
+      // ============================================================
+      function renderSwatches(containerId, colors, key) {
+        const el = document.getElementById(containerId);
+        el.innerHTML = '';
+        colors.forEach((hex) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'w-6 h-6 rounded-md border-2 transition-transform hover:scale-110';
+          btn.style.backgroundColor = hex;
+          btn.style.borderColor = avatarConfig[key] === hex ? '#facc15' : 'rgba(255,255,255,0.25)';
+          btn.addEventListener('click', () => {
+            avatarConfig[key] = hex;
+            renderAllSwatches();
+            rebuildPreviewCharacter();
+          });
+          el.appendChild(btn);
+        });
+      }
+
+      function renderAllSwatches() {
+        renderSwatches('skin-swatches', SKIN_COLORS, 'skin');
+        renderSwatches('shirt-swatches', OUTFIT_COLORS, 'shirt');
+        renderSwatches('pants-swatches', OUTFIT_COLORS, 'pants');
+        renderSwatches('shoes-swatches', OUTFIT_COLORS, 'shoes');
+      }
+
+      function renderPresets() {
+        const grid = document.getElementById('preset-grid');
+        grid.innerHTML = '';
+        AVATAR_PRESETS.forEach((p) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'pixel-btn flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/15 text-xs font-bold';
+          btn.innerHTML = `<span class="text-lg leading-none mb-1">${p.icon}</span><span class="text-[10px] text-slate-200">${p.name}</span>`;
+          btn.addEventListener('click', () => {
+            Object.assign(avatarConfig, {
+              skin: p.skin,
+              shirt: p.shirt,
+              pants: p.pants,
+              shoes: p.shoes,
+              shirtStyle: p.shirtStyle,
+              hat: p.hat,
+              back: p.back
+            });
+            syncSelectsFromConfig();
+            renderAllSwatches();
+            rebuildPreviewCharacter();
+          });
+          grid.appendChild(btn);
+        });
+      }
+
+      function syncSelectsFromConfig() {
+        document.getElementById('shirt-style-select').value = avatarConfig.shirtStyle;
+        document.getElementById('hat-select').value = avatarConfig.hat;
+        document.getElementById('back-select').value = avatarConfig.back;
+      }
+
+      document.getElementById('nickname-input').addEventListener('input', (e) => {
+        const val = e.target.value.trim() || 'Runner';
+        avatarConfig.nickname = val;
+        document.getElementById('preview-nickname-badge').textContent = val;
+      });
+
+      document.getElementById('shirt-style-select').addEventListener('change', (e) => {
+        avatarConfig.shirtStyle = e.target.value;
+        rebuildPreviewCharacter();
+      });
+      document.getElementById('hat-select').addEventListener('change', (e) => {
+        avatarConfig.hat = e.target.value;
+        rebuildPreviewCharacter();
+      });
+      document.getElementById('back-select').addEventListener('change', (e) => {
+        avatarConfig.back = e.target.value;
+        rebuildPreviewCharacter();
+      });
+
+      document.getElementById('randomize-avatar-btn').addEventListener('click', () => {
+        const pick = (arr) => arr[randInt(0, arr.length - 1)];
+        avatarConfig.skin = pick(SKIN_COLORS);
+        avatarConfig.shirt = pick(OUTFIT_COLORS);
+        avatarConfig.pants = pick(OUTFIT_COLORS);
+        avatarConfig.shoes = pick(OUTFIT_COLORS);
+        avatarConfig.shirtStyle = pick(['solid', 'stripes', 'star', 'hoodie']);
+        avatarConfig.hat = pick(['none', 'cap', 'crown', 'wizard', 'headphones', 'helmet']);
+        avatarConfig.back = pick(['none', 'backpack', 'cape', 'wings']);
+        syncSelectsFromConfig();
+        renderAllSwatches();
+        rebuildPreviewCharacter();
+      });
+
+      // Grade Level Difficulty Buttons
+      function updateGradeUI() {
+        const g = gameSettings.gradeLevel;
+        const hintEl = document.getElementById('grade-rule-hint');
+        const topicSub = document.getElementById('topic-subhint');
+        const divBtn = document.getElementById('op-div-btn');
+
+        if (g === '1-2') {
+          hintEl.textContent = '+, − (1–100) • × (1–5) • No ÷';
+          topicSub.textContent = 'Grade 1–2: +, − (1–100), × (1–5)';
+          divBtn.disabled = true;
+          divBtn.classList.add('opacity-35', 'cursor-not-allowed');
+          if (gameSettings.opMode === 'div') {
+            gameSettings.opMode = 'all';
+            document.querySelectorAll('.op-btn').forEach((b) => {
+              b.className = b.dataset.op === 'all'
+                ? 'op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950'
+                : 'op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700';
+            });
+            divBtn.classList.add('opacity-35', 'cursor-not-allowed');
+          }
+        } else if (g === '3-4') {
+          hintEl.textContent = '+, − (1–100) • × (1–10) • ÷ (1–50)';
+          topicSub.textContent = 'Grade 3–4: +, − (1–100), × (1–10), ÷ (1–50)';
+          divBtn.disabled = false;
+          divBtn.classList.remove('opacity-35', 'cursor-not-allowed');
+        } else {
+          hintEl.textContent = '+, −, ÷ (1–100) • × (1–10)';
+          topicSub.textContent = 'Grade 5–6: All operations (1–100 & 1–10)';
+          divBtn.disabled = false;
+          divBtn.classList.remove('opacity-35', 'cursor-not-allowed');
+        }
+      }
+
+      document.querySelectorAll('.grade-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          gameSettings.gradeLevel = btn.dataset.grade;
+          document.querySelectorAll('.grade-btn').forEach((b) => {
+            b.className = b === btn
+              ? 'grade-btn px-2.5 py-2 rounded-xl text-xs font-bold bg-sky-400 text-slate-950 border border-sky-300'
+              : 'grade-btn px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 border border-white/10';
+          });
+          updateGradeUI();
+        });
+      });
+
+      // Scoreboard Grade Filter Buttons
+      document.querySelectorAll('.sb-filter-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          sbFilter = btn.dataset.sbFilter;
+          document.querySelectorAll('.sb-filter-btn').forEach((b) => {
+            b.className = b === btn
+              ? 'sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-950'
+              : 'sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300';
+          });
+          renderScoreboard();
+        });
+      });
+
+      // Math Topic Filter Buttons
+      document.querySelectorAll('.op-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          gameSettings.opMode = btn.dataset.op;
+          document.querySelectorAll('.op-btn').forEach((b) => {
+            b.className = b === btn
+              ? 'op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950'
+              : 'op-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700';
+          });
+        });
+      });
+
+      // Speed Buttons
+      document.querySelectorAll('.speed-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          gameSettings.speedMode = btn.dataset.speed;
+          document.querySelectorAll('.speed-btn').forEach((b) => {
+            b.className = b === btn
+              ? 'speed-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-emerald-400 text-slate-950'
+              : 'speed-btn px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700';
+          });
+        });
+      });
+
+      // Mute Toggles
+      function toggleMute() {
+        SoundFX.muted = !SoundFX.muted;
+        document.querySelectorAll('.sound-icon').forEach((el) => { el.textContent = SoundFX.muted ? '🔇' : '🔊'; });
+        document.querySelectorAll('.sound-label').forEach((el) => { el.textContent = SoundFX.muted ? 'Muted' : 'Sound On'; });
+      }
+      document.getElementById('mute-btn-setup').addEventListener('click', toggleMute);
+      document.getElementById('mute-btn-game').addEventListener('click', toggleMute);
+
+      // Start, Pause, Resume, Quit, Play Again
+      document.getElementById('start-game-btn').addEventListener('click', startNewGame);
+      document.getElementById('play-again-btn').addEventListener('click', startNewGame);
+
+      function togglePause() {
+        if (!state.running || state.gameOver) return;
+        state.paused = !state.paused;
+        document.getElementById('pause-modal').classList.toggle('hidden', !state.paused);
+        if (state.paused) SoundFX.stopBGM();
+        else SoundFX.startBGM();
+      }
+      document.getElementById('pause-btn').addEventListener('click', togglePause);
+      document.getElementById('resume-btn').addEventListener('click', togglePause);
+
+      function returnToSetup() {
+        state.running = false;
+        state.paused = false;
+        SoundFX.stopBGM();
+        document.getElementById('pause-modal').classList.add('hidden');
+        document.getElementById('gameover-modal').classList.add('hidden');
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('setup-screen').classList.remove('hidden');
+        resizePreview();
+      }
+      document.getElementById('quit-to-setup-btn').addEventListener('click', returnToSetup);
+      document.getElementById('customize-again-btn').addEventListener('click', returnToSetup);
+
+      // Keyboard Controls (Desktop)
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+          moveLane(-1);
+        } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+          moveLane(1);
+        } else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+          if (!document.getElementById('game-screen').classList.contains('hidden')) togglePause();
+        }
+      });
+
+      // On-Screen Lane Buttons (Phone, Tablet & Mouse)
+      document.getElementById('btn-lane-left').addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        moveLane(-1);
+      });
+      document.getElementById('btn-lane-right').addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        moveLane(1);
+      });
+
+      // Touch Swipe Controls on Game Canvas (Phone & Tablet)
+      let touchStartX = 0;
+      let touchActive = false;
+      gameCanvas.addEventListener('pointerdown', (e) => {
+        touchStartX = e.clientX;
+        touchActive = true;
+      });
+      gameCanvas.addEventListener('pointermove', (e) => {
+        if (!touchActive) return;
+        const dx = e.clientX - touchStartX;
+        if (Math.abs(dx) > 36) {
+          moveLane(dx > 0 ? 1 : -1);
+          touchActive = false;
+        }
+      });
+      gameCanvas.addEventListener('pointerup', () => { touchActive = false; });
+      gameCanvas.addEventListener('pointercancel', () => { touchActive = false; });
+
+      // Window Resize
+      window.addEventListener('resize', () => {
+        resizePreview();
+        resizeGame();
+      });
+
+      // Init
+      window.onload = function () {
+        renderPresets();
+        renderAllSwatches();
+        syncSelectsFromConfig();
+        rebuildPreviewCharacter();
+        resizePreview();
+        resizeGame();
+        requestAnimationFrame(animate);
+      };
+    })();
+  </script>
+</body>
+</html>
