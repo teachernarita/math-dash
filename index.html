@@ -53,6 +53,8 @@
       touch-action: none;
     }
     #preview-canvas {
+      position: absolute;
+      inset: 0;
       display: block;
       width: 100%;
       height: 100%;
@@ -131,7 +133,7 @@
             <span id="preview-nickname-badge" class="px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold truncate max-w-[160px]">Squibble</span>
           </div>
 
-          <div class="relative flex-1 min-h-[220px] sm:min-h-[260px] rounded-2xl overflow-hidden bg-gradient-to-b from-sky-200/80 via-emerald-100/60 to-amber-100/70 border border-sky-200">
+          <div id="preview-stage" class="relative w-full h-[260px] sm:h-[310px] lg:flex-1 lg:min-h-[320px] rounded-2xl overflow-hidden bg-gradient-to-b from-sky-200/80 via-emerald-100/60 to-amber-100/70 border border-sky-200">
             <canvas id="preview-canvas"></canvas>
             <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
               <span class="text-[10px] text-slate-700 font-semibold bg-white/80 px-2.5 py-1 rounded-lg shadow-sm">Drag to rotate</span>
@@ -412,12 +414,23 @@
         <!-- School-Wide Scoreboard -->
         <div class="bg-slate-950/70 border border-white/15 rounded-xl p-3 mb-4 text-left">
           <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span class="text-xs font-extrabold uppercase tracking-wider text-amber-300">🏫 School Scoreboard</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-amber-300">🏫 School Scoreboard</span>
+              <span id="sb-sync-status" class="text-[10px] font-semibold text-slate-400">Local</span>
+              <button id="sb-cloud-btn" type="button" class="px-1.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-300 text-[10px] font-bold" title="Link Google Sheet Database">☁️ Sync</button>
+            </div>
             <div id="sb-filter-group" class="flex gap-1">
               <button type="button" data-sb-filter="all" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-950">All</button>
               <button type="button" data-sb-filter="1-2" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">Gr 1–2</button>
               <button type="button" data-sb-filter="3-4" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">Gr 3–4</button>
               <button type="button" data-sb-filter="5-6" class="sb-filter-btn px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">Gr 5–6</button>
+            </div>
+          </div>
+          <div id="sb-cloud-panel" class="hidden mb-2 p-2.5 rounded-lg bg-slate-900 border border-sky-400/30 space-y-1.5">
+            <div class="text-[10px] text-sky-200 font-semibold">Paste your Google Apps Script Web App URL so all devices share the same Google Sheet scoreboard:</div>
+            <div class="flex gap-1.5">
+              <input id="sb-cloud-url-input" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="flex-1 px-2 py-1 rounded bg-slate-800 border border-slate-600 text-[11px] text-white focus:outline-none focus:border-sky-400" />
+              <button id="sb-cloud-save-btn" type="button" class="px-2.5 py-1 rounded bg-sky-400 hover:bg-sky-300 text-slate-950 text-[11px] font-extrabold">Save</button>
             </div>
           </div>
           <div id="scoreboard-list" class="max-h-40 overflow-y-auto custom-scroll space-y-1.5 pr-1"></div>
@@ -741,10 +754,23 @@
       };
 
       const SCOREBOARD_KEY = 'math_dash_scoreboard_v2';
+      const CLOUD_URL_KEY = 'math_dash_cloud_sheet_url_v1';
+      // Optional: paste your deployed Google Apps Script Web App URL below before uploading to GitHub
+      const DEFAULT_CLOUD_SCOREBOARD_URL = 'https://script.google.com/macros/s/AKfycbwEieU5sNUm9P7V6NmowVsPHlqaw_M21dU69yZADVG3sqcFe2YxkVATmsbuU6RpthFM/exec';
       let currentRunId = null;
       let sbFilter = 'all';
+      let cloudEntriesCache = null;
+
+      function getCloudScoreboardUrl() {
+        try {
+          const saved = localStorage.getItem(CLOUD_URL_KEY);
+          if (saved && saved.startsWith('https://')) return saved;
+        } catch (e) {}
+        return DEFAULT_CLOUD_SCOREBOARD_URL;
+      }
 
       function loadScoreboard() {
+        if (Array.isArray(cloudEntriesCache)) return cloudEntriesCache;
         try {
           const raw = localStorage.getItem(SCOREBOARD_KEY);
           if (raw) {
@@ -761,11 +787,46 @@
         } catch (e) {}
       }
 
-      function recordScoreEntry(entry) {
+      async function fetchCloudScoreboard() {
+        const url = getCloudScoreboardUrl();
+        const statusEl = document.getElementById('sb-sync-status');
+        if (!url) {
+          if (statusEl) statusEl.textContent = 'Local';
+          return;
+        }
+        try {
+          if (statusEl) statusEl.textContent = 'Syncing...';
+          const res = await fetch(url);
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            cloudEntriesCache = data;
+            cloudEntriesCache.sort((a, b) => Number(b.score) - Number(a.score) || Number(b.correct) - Number(a.correct));
+            saveScoreboard(cloudEntriesCache);
+            if (statusEl) statusEl.textContent = '☁️ Live Sheet';
+            renderScoreboard();
+          }
+        } catch (e) {
+          if (statusEl) statusEl.textContent = 'Offline (Local)';
+        }
+      }
+
+      async function recordScoreEntry(entry) {
         const list = loadScoreboard();
         list.push(entry);
-        list.sort((a, b) => b.score - a.score || b.correct - a.correct);
+        list.sort((a, b) => Number(b.score) - Number(a.score) || Number(b.correct) - Number(a.correct));
         saveScoreboard(list);
+
+        const url = getCloudScoreboardUrl();
+        if (url) {
+          try {
+            await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(entry)
+            });
+            await fetchCloudScoreboard();
+          } catch (e) {}
+        }
       }
 
       function renderScoreboard() {
@@ -942,7 +1003,7 @@
 
         // Head Group
         const headGroup = new THREE.Group();
-        headGroup.position.set(0, 1.56, 0);
+        headGroup.position.set(0, 1.66, 0);
         const headMaterials = [skinMat, skinMat, topHeadMat, skinMat, faceMat, topHeadMat];
         const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.72, 0.74), headMaterials);
         headMesh.castShadow = true;
@@ -1039,7 +1100,7 @@
 
         // Torso
         const torsoGroup = new THREE.Group();
-        torsoGroup.position.set(0, 0.82, 0);
+        torsoGroup.position.set(0, 0.94, 0);
         const torsoMaterials = [shirtSideMat, shirtSideMat, shirtSideMat, shirtSideMat, shirtFrontMat, shirtSideMat];
         const torso = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.76, 0.44), torsoMaterials);
         torso.castShadow = true;
@@ -1131,7 +1192,7 @@
         // Articulated R15-Style Arms (Shoulder + Forearm/Elbow)
         function makeArm(x) {
           const shoulder = new THREE.Group();
-          shoulder.position.set(x, 1.14, 0);
+          shoulder.position.set(x, 1.26, 0);
           const upper = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.26), shirtSideMat);
           upper.position.set(0, -0.16, 0);
           upper.castShadow = true;
@@ -1151,7 +1212,7 @@
         // Articulated R15-Style Legs (Hip + Knee/Shin/Shoe)
         function makeLeg(x) {
           const hip = new THREE.Group();
-          hip.position.set(x, 0.44, 0);
+          hip.position.set(x, 0.56, 0);
           const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.28, 0.34), pantsMat);
           thigh.position.set(0, -0.14, 0);
           thigh.castShadow = true;
@@ -1204,21 +1265,21 @@
       const previewCanvas = document.getElementById('preview-canvas');
       const previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, alpha: true, antialias: true });
       const previewScene = new THREE.Scene();
-      const previewCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 50);
-      previewCamera.position.set(0, 1.2, 4.1);
-      previewCamera.lookAt(0, 0.95, 0);
+      const previewCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
+      previewCamera.position.set(0, 1.35, 4.8);
+      previewCamera.lookAt(0, 1.05, 0);
 
-      previewScene.add(new THREE.AmbientLight(0xffffff, 0.78));
-      const pDir = new THREE.DirectionalLight(0xffffff, 0.75);
-      pDir.position.set(3, 5, 4);
+      previewScene.add(new THREE.HemisphereLight(0xffffff, 0x64748b, 0.82));
+      const pDir = new THREE.DirectionalLight(0xffffff, 0.85);
+      pDir.position.set(3, 6, 5);
       previewScene.add(pDir);
 
-      // Pedestal
+      // Pedestal (top surface at y = 0.0)
       const pedestal = new THREE.Mesh(
-        new THREE.BoxGeometry(1.9, 0.2, 1.9),
-        new THREE.MeshLambertMaterial({ color: 0x334155 })
+        new THREE.BoxGeometry(1.9, 0.18, 1.9),
+        new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 })
       );
-      pedestal.position.set(0, -0.2, 0);
+      pedestal.position.set(0, -0.09, 0);
       previewScene.add(pedestal);
 
       let previewChar = null;
@@ -1231,20 +1292,27 @@
           previewScene.remove(previewChar.root);
         }
         previewChar = buildBlockyCharacter(avatarConfig);
-        previewChar.root.position.set(0, 0.02, 0);
+        previewChar.root.position.set(0, 0, 0);
         previewChar.root.rotation.y = previewAngle;
         previewScene.add(previewChar.root);
       }
 
       function resizePreview() {
-        const parent = previewCanvas.parentElement;
+        const parent = document.getElementById('preview-stage') || previewCanvas.parentElement;
         if (!parent) return;
-        const w = parent.clientWidth || 300;
-        const h = parent.clientHeight || 240;
+        const rect = parent.getBoundingClientRect();
+        const w = Math.max(1, Math.round(rect.width));
+        const h = Math.max(1, Math.round(rect.height));
         previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         previewRenderer.setSize(w, h, false);
         previewCamera.aspect = w / h;
         previewCamera.updateProjectionMatrix();
+      }
+
+      if ('ResizeObserver' in window) {
+        const ro = new ResizeObserver(() => resizePreview());
+        const stageEl = document.getElementById('preview-stage');
+        if (stageEl) ro.observe(stageEl);
       }
 
       previewCanvas.addEventListener('pointerdown', (e) => {
@@ -1277,14 +1345,16 @@
         let a = 1, b = 1, ans = 2, symbol = '+';
 
         if (op === 'add') {
-          // 1 to 100 for all grades
-          a = randInt(1, 100);
-          b = randInt(1, 100);
+          // Grade 1-2: 1 to 25; Grade 3-6: 1 to 100
+          const maxAdd = gradeLevel === '1-2' ? 25 : 100;
+          a = randInt(1, maxAdd);
+          b = randInt(1, maxAdd);
           ans = a + b;
           symbol = '+';
         } else if (op === 'sub') {
-          // 1 to 100, non-negative result for all grades
-          a = randInt(1, 100);
+          // Grade 1-2: 1 to 25; Grade 3-6: 1 to 100 (non-negative)
+          const maxSub = gradeLevel === '1-2' ? 25 : 100;
+          a = randInt(1, maxSub);
           b = randInt(1, a);
           ans = a - b;
           symbol = '−';
@@ -2415,11 +2485,11 @@
 
         let badges = [];
         if (g === '1-2') {
-          hintEl.textContent = 'Auto: +, − (1–100) • × (1–5)';
-          topicSub.textContent = 'Grade 1–2: Addition & Subtraction (1–100), Multiplication (1–5)';
+          hintEl.textContent = 'Auto: +, − (1–25) • × (1–5)';
+          topicSub.textContent = 'Grade 1–2: Addition & Subtraction (1–25), Multiplication (1–5)';
           badges = [
-            { label: '+ Add (1–100)', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-            { label: '− Sub (1–100)', cls: 'bg-sky-100 text-sky-800 border-sky-300' },
+            { label: '+ Add (1–25)', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+            { label: '− Sub (1–25)', cls: 'bg-sky-100 text-sky-800 border-sky-300' },
             { label: '× Mul (1–5)', cls: 'bg-amber-100 text-amber-800 border-amber-300' }
           ];
         } else if (g === '3-4') {
@@ -2454,6 +2524,23 @@
           });
           updateGradeUI();
         });
+      });
+
+      // Cloud Scoreboard Sync Setup
+      document.getElementById('sb-cloud-btn').addEventListener('click', () => {
+        const panel = document.getElementById('sb-cloud-panel');
+        document.getElementById('sb-cloud-url-input').value = getCloudScoreboardUrl();
+        panel.classList.toggle('hidden');
+      });
+      document.getElementById('sb-cloud-save-btn').addEventListener('click', () => {
+        const val = document.getElementById('sb-cloud-url-input').value.trim();
+        try {
+          if (val && val.startsWith('https://')) localStorage.setItem(CLOUD_URL_KEY, val);
+          else localStorage.removeItem(CLOUD_URL_KEY);
+        } catch (e) {}
+        cloudEntriesCache = null;
+        document.getElementById('sb-cloud-panel').classList.add('hidden');
+        fetchCloudScoreboard();
       });
 
       // Scoreboard Grade Filter Buttons
