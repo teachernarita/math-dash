@@ -826,10 +826,20 @@
       const SCOREBOARD_KEY = 'math_dash_scoreboard_v2';
       const CLOUD_URL_KEY = 'math_dash_cloud_sheet_url_v1';
       // Optional: paste your deployed Google Apps Script Web App URL below before uploading to GitHub
-      const DEFAULT_CLOUD_SCOREBOARD_URL = 'https://script.google.com/macros/s/AKfycbwEieU5sNUm9P7V6NmowVsPHlqaw_M21dU69yZADVG3sqcFe2YxkVATmsbuU6RpthFM/exec';
+      const DEFAULT_CLOUD_SCOREBOARD_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
       let currentRunId = null;
       let sbFilter = 'all';
       let cloudEntriesCache = null;
+
+      function normalizeGrade(g) {
+        const str = String(g || '').trim();
+        if (str === '1-2' || str === '3-4' || str === '5-6') return str;
+        // Google Sheets auto-parses "5-6" as May 6 or June 5, "3-4" as Mar 4 or Apr 3, "1-2" as Jan 2 or Feb 1
+        if (/\b(May|Jun)\b/i.test(str) || /2026-0[56]-0[56]/.test(str)) return '5-6';
+        if (/\b(Mar|Apr)\b/i.test(str) || /2026-0[34]-0[34]/.test(str)) return '3-4';
+        if (/\b(Jan|Feb)\b/i.test(str) || /2026-0[12]-0[12]/.test(str)) return '1-2';
+        return '5-6';
+      }
 
       function getCloudScoreboardUrl() {
         try {
@@ -869,7 +879,7 @@
           const res = await fetch(url);
           const data = await res.json();
           if (Array.isArray(data)) {
-            cloudEntriesCache = data;
+            cloudEntriesCache = data.map((d) => ({ ...d, grade: normalizeGrade(d.grade) }));
             cloudEntriesCache.sort((a, b) => Number(b.score) - Number(a.score) || Number(b.correct) - Number(a.correct));
             saveScoreboard(cloudEntriesCache);
             if (statusEl) statusEl.textContent = '☁️ Live Sheet';
@@ -902,7 +912,7 @@
       function renderScoreboard() {
         const container = document.getElementById('scoreboard-list');
         if (!container) return;
-        const all = loadScoreboard();
+        const all = loadScoreboard().map((d) => ({ ...d, grade: normalizeGrade(d.grade) }));
         const filtered = sbFilter === 'all' ? all : all.filter((item) => item.grade === sbFilter);
         container.innerHTML = '';
         if (filtered.length === 0) {
@@ -919,9 +929,9 @@
           row.innerHTML = `
             <div class="flex items-center gap-2 min-w-0">
               <span class="font-extrabold w-6 text-center shrink-0">${medal}</span>
-              <span class="font-bold text-white truncate">${item.nickname}</span>
-              ${isMe ? '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-black">YOU</span>' : ''}
-              <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 text-[10px] font-semibold shrink-0">Gr ${item.grade}</span>
+              <span class="font-bold text-white truncate max-w-[140px] sm:max-w-[200px]">${item.nickname || 'Runner'}</span>
+              ${isMe ? '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-black shrink-0">YOU</span>' : ''}
+              <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 text-[10px] font-semibold shrink-0">Gr ${normalizeGrade(item.grade)}</span>
             </div>
             <div class="flex items-center gap-2.5 shrink-0">
               <span class="hidden sm:inline text-[10px] text-slate-400">${item.correct} ✓</span>
